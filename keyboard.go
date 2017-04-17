@@ -19,6 +19,8 @@ var (
 	clientCharacteristicID = gatt.UUID16(0x2902)
 	reportReferenceID = gatt.UUID16(0x2908)
 
+	bootKeyboardInputReportID = gatt.UUID16(0x2a22)
+	bootKeyboardOutputReportID = gatt.UUID16(0x2a32)
 	hidInfoID = gatt.UUID16(0x2a4a)
 	reportMapID = gatt.UUID16(0x2a4b)
 	hidControlPointID = gatt.UUID16(0x2a4c)
@@ -48,16 +50,16 @@ var (
 )
 
 type KeyboardService struct {
-	protocolMode byte
-	inputClientConfig [2]byte
-	outputClientConfig [2]byte
-	inputReport [8]byte
-	outputReport [1]byte
+	protocolMode []byte
+	inputClientConfig []byte
+	bootInputClientConfig []byte
+	inputReport []byte
+	outputReport []byte
 
 	service *gatt.Service
 }
 
-func makeReadFunc(data []byte, name string) func(gatt.ResponseWriter, *gatt.Request) {
+func makeReadFunc(data []byte, name string) func(w gatt.ResponseWriter, r *gatt.ReadRequest) {
 	return func(w gatt.ResponseWriter, r *gatt.ReadRequest) {
 		if r.Offset >= len(data) {
 			log.Print("Invalid offset reading %s", name)
@@ -70,37 +72,35 @@ func makeReadFunc(data []byte, name string) func(gatt.ResponseWriter, *gatt.Requ
 			return
 		}
 		w.SetStatus(0)
-	};
+	}
 }
 
-func makeWriteFunc(data []byte, name string) func(gatt.Request, []byte) byte {
+func makeWriteFunc(buffer []byte, name string) func(gatt.Request, []byte) byte {
 	return func(r gatt.Request, data []byte) byte {
-		if len(data) != len(data) {
+		if len(data) != len(buffer) {
 			log.Printf("Bad write: %s\n", data)
 			return 6; // Not supported.
 		}
-		ks.protocolMode = data[0];
-		log.Printf("Protocol mode changed: %d\n", ks.protocolMode)
+		copy(buffer, data)
+		log.Printf("Write %s: %s\n", name, data)
 		return 0;
 	};
 }
 
 func (ks *KeyboardService) Reset() {
-	ks.protocolMode = 0
-	for i := range(2) {
-		ks.inputClientConfig[i] = 0
-		ks.outputClientConfig[i] = 0
-	}
-	for i := range(8) {
-		ks.inputReport[i] = 0
-	}
-	ks.outputReport[0] = 0
+	ks.protocolMode = make([]byte, 1)
+
+	ks.inputClientConfig = make([]byte, 2)
+	ks.bootInputClientConfig = make([]byte, 2)
+	ks.inputReport = make([]byte, 8)
+
+	ks.outputReport = make([]byte, 1)
 }
 
 // TODO: Add a channel for sending reports?
 func NewKeyboardService() *KeyboardService {
 	ks := &KeyboardService{}
-	ks.protocolMode = reportMode
+	ks.protocolMode[0] = reportMode
 	// TODO: initialize defaults.
 	return ks
 }
@@ -110,105 +110,37 @@ func (ks *KeyboardService) GetService() *gatt.Service {
 		ks.service = gatt.NewService(hidID)
 
 		c := ks.service.AddCharacteristic(protocolModeID)
-		c.HandleReadFunc(
-			func(w gatt.ResponseWriter, r *gatt.ReadRequest) {
-				if r.Offset > 0 {
-					w.SetStatus(7) // Invalid offset
-					return
-				}
-				if _, err := w.Write([]byte{ks.protocolMode}); err != nil {
-					log.Println("Protocol mode read failed.", err)
-					w.SetStatus(14) // "Unlikely"
-					return
-				}
-				w.SetStatus(0)
-			})
-		c.HandleWriteFunc(
-			func(r gatt.Request, data []byte) byte {
-				if len(data) != 1 || data[0] > 1 {
-					log.Printf("Bad protocol mode write: %s\n", data)
-					return 6; // Not supported.
-				}
-				ks.protocolMode = data[0];
-				log.Printf("Protocol mode changed: %d\n", ks.protocolMode)
-				return 0;
-			})
+		c.HandleReadFunc(makeReadFunc(ks.protocolMode, "Protocol Mode"))
+		c.HandleWriteFunc(makeWriteFunc(ks.protocolMode, "Protocol Mode"))
+		// TODO: events on write.
 
-		c := ks.service.AddCharacteristic(reportID)
-		d := c.AddDescriptor(reportReferenceID).SetValue(inputReportRef)
+		c = ks.service.AddCharacteristic(reportID)
+		c.HandleReadFunc(makeReadFunc(ks.inputReport, "Input Report"))
+		c.AddDescriptor(reportReferenceID).SetValue(inputReportRef)
 		d := c.AddDescriptor(clientCharacteristicID)
-		d.HandleReadFunc(
-			func(w gatt.ResponseWriter, r *gatt.ReadRequest) {
-				if r.Offset > 1 {
-					w.SetStatus(7) // Invalid offset
-					return
-				}
-				if _, err := w.Write(ks.inputClientConfig[r.Offset:]); err != nil {
-					log.Println("Input client config read failed.", err)
-					w.SetStatus(14) // Unlikely
-				}
-				w.SetStatus(0)
-			})
-		c.HandleWriteFunc(
-			func(r gatt.Request, data []byte) byte {
-				if len(data) != 2 {
-					log.Printf("Bad input client config write: %s\n", data)
-					return 6; // Not supported.
-				}
-				copy(ks.inputClientConfig, data)
-				log.Printf("Input client config changed: %d\n", ks.protocolMode)
-				return 0;
-			})
-		c.HandleReadFunc(
-			func(w gatt.ResponseWriter, r *gatt.ReadRequest) {
-				if r.Offset > 7 {
-					w.SetStatus(7)
-					return
-				}
-				if _, err := w.Write(ks.inputReport[r.Offset:]); err != nil {
-					log.Println("Input report read failed.", err)
-					w.SetStatus(14)
-					return
-				}
-				w.SetStatus(0)
-			})
+		d.HandleReadFunc(makeReadFunc(ks.inputClientConfig, "Input Client Config"))
+		d.HandleWriteFunc(makeWriteFunc(ks.inputClientConfig, "Input Client Config"))
+		// TODO: events on write.
 
-		c := ks.service.AddCharacteristic(reportID)
-		d := c.AddDescriptor(reportReferenceID).SetValue(outputReportRef)
-		d := c.AddDescriptor(clientCharacteristicID)
-		d.HandleReadFunc(
-			func(w gatt.ResponseWriter, r *gatt.ReadRequest) {
-				if r.Offset > 1 {
-					w.SetStatus(7) // Invalid offset
-					return
-				}
-				if _, err := w.Write(ks.outputClientConfig[r.Offset:]); err != nil {
-					log.Println("Output client config read failed.", err)
-					w.SetStatus(14) // Unlikely
-				}
-				w.SetStatus(0)
-			})
-		c.HandleWriteFunc(
-			func(r gatt.Request, data []byte) byte {
-				if len(data) != 2 {
-					log.Printf("Bad output client config write: %s\n", data)
-					return 6; // Not supported.
-				}
-				copy(ks.outputClientConfig, data)
-				log.Printf("Output client config changed: %d\n", ks.protocolMode)
-				return 0;
-			})
+		c = ks.service.AddCharacteristic(reportID)
+		c.HandleReadFunc(makeReadFunc(ks.outputReport, "Output Report"))
+		c.HandleWriteFunc(makeWriteFunc(ks.outputReport, "Output Report"))
+		// TODO: events on write.
+		c.AddDescriptor(reportReferenceID).SetValue(outputReportRef)
 
-		// TODO: report characteristics (input/output).
-		// TODO: - client characteristic descriptors (input/output).
-		// TODO: - report reference descriptors (input/output).
+		ks.service.AddCharacteristic(reportMapID).SetValue(hidDescriptor)
 
-		c := ks.service.AddCharacteristic(reportMapID).SetValue(hidDescriptor)
+		c = ks.service.AddCharacteristic(bootKeyboardInputReportID)
+		c.HandleReadFunc(makeReadFunc(ks.inputReport, "Boot Input Report"))
+		d = c.AddDescriptor(clientCharacteristicID)
+		d.HandleReadFunc(makeReadFunc(ks.bootInputClientConfig, "Boot Input Client Config"))
+		d.HandleWriteFunc(makeWriteFunc(ks.bootInputClientConfig, "Boot Input Client Config"))
+		// TODO: events on write.
 
-		// TODO: boot keyboard input report characteristic.
-		// TODO: - client characteristic descriptor.
-
-		// TODO: boot keyboard output report characteristic.
+		c = ks.service.AddCharacteristic(bootKeyboardOutputReportID)
+		c.HandleReadFunc(makeReadFunc(ks.outputReport, "Boot Output Report"))
+		c.HandleWriteFunc(makeWriteFunc(ks.outputReport, "Boot Output Report"))
+		// TODO: events on write.
 		
 		ks.service.AddCharacteristic(hidInfoID).SetValue(hidInfo)
 
