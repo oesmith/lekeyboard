@@ -115,10 +115,12 @@ func (ks *KeyboardService) GetService() *gatt.Service {
 
 		c = ks.service.AddCharacteristic(reportID)
 		c.HandleReadFunc(makeReadFunc(ks.inputReport, "Input Report"))
+		c.HandleNotifyFunc(
+			func(r gatt.Request, n gatt.Notifier) {
+				// TODO: hook up the notifier.
+				log.Println("HandleNotify: Input report")
+			})
 		c.AddDescriptor(reportReferenceID).SetValue(inputReportRef)
-		d := c.AddDescriptor(clientCharacteristicID)
-		d.HandleReadFunc(makeReadFunc(ks.inputClientConfig, "Input Client Config"))
-		d.HandleWriteFunc(makeWriteFunc(ks.inputClientConfig, "Input Client Config"))
 		// TODO: events on write.
 
 		c = ks.service.AddCharacteristic(reportID)
@@ -131,16 +133,18 @@ func (ks *KeyboardService) GetService() *gatt.Service {
 
 		c = ks.service.AddCharacteristic(bootKeyboardInputReportID)
 		c.HandleReadFunc(makeReadFunc(ks.inputReport, "Boot Input Report"))
-		d = c.AddDescriptor(clientCharacteristicID)
-		d.HandleReadFunc(makeReadFunc(ks.bootInputClientConfig, "Boot Input Client Config"))
-		d.HandleWriteFunc(makeWriteFunc(ks.bootInputClientConfig, "Boot Input Client Config"))
+		c.HandleNotifyFunc(
+			func(r gatt.Request, n gatt.Notifier) {
+				// TODO: hook up the notifier.
+				log.Println("HandleNotify: Boot Input Report")
+			})
 		// TODO: events on write.
 
 		c = ks.service.AddCharacteristic(bootKeyboardOutputReportID)
 		c.HandleReadFunc(makeReadFunc(ks.outputReport, "Boot Output Report"))
 		c.HandleWriteFunc(makeWriteFunc(ks.outputReport, "Boot Output Report"))
 		// TODO: events on write.
-		
+
 		ks.service.AddCharacteristic(hidInfoID).SetValue(hidInfo)
 
 		c = ks.service.AddCharacteristic(hidControlPointID)

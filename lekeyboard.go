@@ -24,8 +24,14 @@ func Run() {
 		return
 	}
 	d.Handle(
-		gatt.CentralConnected(func(c gatt.Central) { log.Println("Connect:", c.ID()) }),
-		gatt.CentralDisconnected(func(c gatt.Central) { log.Println("Disconnect:", c.ID()) }),
+		gatt.CentralConnected(
+		  func(c gatt.Central) {
+		    log.Println("Connect:", c.ID())
+		  }),
+		gatt.CentralDisconnected(
+		  func(c gatt.Central) {
+		    log.Println("Disconnect:", c.ID())
+		  }),
 	)
 	d.Init(onStateChanged)
 	select {}
@@ -42,11 +48,16 @@ func onStateChanged(d gatt.Device, s gatt.State) {
 
 	b := NewBatteryService()
 	d.AddService(b)
+	
+	di := NewDeviceInfoService()
+	d.AddService(di)
 
 	ks := NewKeyboardService()
 	k := ks.GetService()
 	d.AddService(k)
 
-	d.AdvertiseNameAndServices("LeKeyboard", []gatt.UUID{b.UUID(), k.UUID()})
+	d.AdvertiseNameAndServices(
+		"LeKeyboard",
+		[]gatt.UUID{b.UUID(), d.UUID(), k.UUID()})
 }
 
