@@ -87,6 +87,13 @@ func makeWriteFunc(buffer []byte, name string) func(gatt.Request, []byte) byte {
 	};
 }
 
+// TODO: Add a channel for sending reports?
+func NewKeyboardService() *KeyboardService {
+	ks := &KeyboardService{}
+	ks.Reset()
+	return ks
+}
+
 func (ks *KeyboardService) Reset() {
 	ks.protocolMode = make([]byte, 1)
 
@@ -95,14 +102,6 @@ func (ks *KeyboardService) Reset() {
 	ks.inputReport = make([]byte, 8)
 
 	ks.outputReport = make([]byte, 1)
-}
-
-// TODO: Add a channel for sending reports?
-func NewKeyboardService() *KeyboardService {
-	ks := &KeyboardService{}
-	ks.protocolMode[0] = reportMode
-	// TODO: initialize defaults.
-	return ks
 }
 
 func (ks *KeyboardService) GetService() *gatt.Service {

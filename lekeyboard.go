@@ -47,6 +47,6 @@ func onStateChanged(d gatt.Device, s gatt.State) {
 	k := ks.GetService()
 	d.AddService(k)
 
-	d.AdvertiseNameAndServices("PiZero", []gatt.UUID{b.UUID(), k.UUID()})
+	d.AdvertiseNameAndServices("LeKeyboard", []gatt.UUID{b.UUID(), k.UUID()})
 }
 
