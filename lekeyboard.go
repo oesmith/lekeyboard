@@ -43,9 +43,10 @@ func onStateChanged(d gatt.Device, s gatt.State) {
 	b := NewBatteryService()
 	d.AddService(b)
 
-	k := NewKeyboardService()
+	ks := NewKeyboardService()
+	k := ks.GetService()
 	d.AddService(k)
 
-	d.AdvertiseNameAndServices("PiZero", []gatt.UUID{b.UUID()})
+	d.AdvertiseNameAndServices("PiZero", []gatt.UUID{b.UUID(), k.UUID()})
 }
 
